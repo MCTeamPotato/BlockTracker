@@ -3,7 +3,7 @@ package me.kall.blocktracker.event;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraftforge.event.level.BlockEvent;
+import net.neoforged.neoforge.event.level.BlockEvent;
 import org.jetbrains.annotations.NotNull;
 
 public class BlockChangeEvent extends BlockEvent {
@@ -36,7 +36,7 @@ public class BlockChangeEvent extends BlockEvent {
     }
 
     @Override
-    public ServerLevel getLevel() {
+    public @NotNull ServerLevel getLevel() {
         return (ServerLevel) super.getLevel();
     }
 

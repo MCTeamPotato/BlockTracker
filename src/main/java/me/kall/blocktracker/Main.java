@@ -1,8 +1,11 @@
 package me.kall.blocktracker;
 
 import me.kall.blocktracker.data.BlockTracker;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.common.Mod;
+import net.neoforged.neoforge.common.NeoForge;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -12,7 +15,7 @@ public final class Main {
     public static final String MOD_NAME = "BlockTracker";
     public static final Logger LOGGER = LogManager.getLogger(MOD_NAME);
 
-    public Main() {
-        BlockTracker.register(MinecraftForge.EVENT_BUS);
+    public Main(IEventBus bus, Dist dist, ModContainer container) {
+        BlockTracker.register(NeoForge.EVENT_BUS);
     }
 }

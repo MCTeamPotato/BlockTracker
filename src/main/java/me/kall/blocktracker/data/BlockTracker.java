@@ -10,20 +10,22 @@ import me.kall.blocktracker.api.Trackable;
 import me.kall.blocktracker.event.BlockChangeEvent;
 import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.LongTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.datafix.DataFixTypes;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.saveddata.SavedData;
-import net.minecraftforge.event.server.ServerStartedEvent;
-import net.minecraftforge.event.server.ServerStartingEvent;
-import net.minecraftforge.eventbus.api.IEventBus;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.event.server.ServerStartedEvent;
+import net.neoforged.neoforge.event.server.ServerStartingEvent;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -176,16 +178,16 @@ public class BlockTracker extends SavedData {
         return data;
     }
 
-    public static @Nullable ResourceLocation getId(Block block) {
-        return ForgeRegistries.BLOCKS.getKey(block);
+    public static @NotNull ResourceLocation getId(Block block) {
+        return BuiltInRegistries.BLOCK.getKey(block);
     }
 
-    public static @Nullable Block getBlock(ResourceLocation id) {
-        return ForgeRegistries.BLOCKS.getValue(id);
+    public static @NotNull Block getBlock(ResourceLocation id) {
+        return BuiltInRegistries.BLOCK.get(id);
     }
 
     @Override
-    public CompoundTag save(CompoundTag nbt) {
+    public CompoundTag save(CompoundTag nbt, HolderLookup.Provider registries) {
         Main.LOGGER.info("Saving tracked block data...");
         int totalDimensions = 0;
         int totalChunks = 0;
@@ -228,12 +230,16 @@ public class BlockTracker extends SavedData {
 
     public static BlockTracker get(ServerLevel level) {
         try {
-            return level.getDataStorage().computeIfAbsent(BlockTracker::load, BlockTracker::new, DATA_NAME);
+            return level.getDataStorage().computeIfAbsent(factory(), DATA_NAME);
         } catch (Exception e) {
             Main.LOGGER.error("Failed to get BlockTracker for level {}", level.dimension().location());
             Main.LOGGER.error("", e);
             return new BlockTracker();
         }
+    }
+
+    private static Factory<BlockTracker> factory() {
+        return new Factory<>(BlockTracker::new, (tag, provider) -> load(tag), DataFixTypes.CHUNK);
     }
 
     public void addBlock(ServerLevel level, BlockPos pos, @Nullable ResourceLocation blockId) {
