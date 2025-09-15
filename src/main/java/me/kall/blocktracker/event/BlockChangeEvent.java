@@ -3,7 +3,7 @@ package me.kall.blocktracker.event;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraftforge.event.level.BlockEvent;
+import net.minecraftforge.event.world.BlockEvent;
 import org.jetbrains.annotations.NotNull;
 
 public class BlockChangeEvent extends BlockEvent {
@@ -35,9 +35,8 @@ public class BlockChangeEvent extends BlockEvent {
         return isSameThread;
     }
 
-    @Override
     public ServerLevel getLevel() {
-        return (ServerLevel) super.getLevel();
+        return (ServerLevel) super.getWorld();
     }
 
     public enum ChangeStatus {
