@@ -20,7 +20,6 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.saveddata.SavedData;
-import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -43,8 +42,7 @@ public class BlockTracker extends SavedData {
 
     public final Object2ObjectMap<ResourceLocation, Long2ObjectMap<Object2ObjectMap<ResourceLocation, LongSet>>> blockStorage = new Object2ObjectOpenHashMap<>();
 
-    public static void register() {
-        IEventBus bus = MinecraftForge.EVENT_BUS;
+    public static void register(IEventBus bus) {
         bus.addListener(BlockTracker::initTracker);
         bus.addListener(BlockTracker::cleanData);
         bus.addListener(BlockTracker::blockChange);

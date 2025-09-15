@@ -49,6 +49,7 @@ public interface Trackable {
 
     static LongSet getTrackedBlocks(ServerLevel level, ChunkPos chunkPos, @Nullable ResourceLocation blockId) {
         if (blockId == null) return LongSets.emptySet();
+        if (!BlockTracker.TRACKED_BLOCKS.containsKey(blockId)) return LongSets.emptySet();
         Long2ObjectMap<Object2ObjectMap<ResourceLocation, LongSet>> chunkMap = BlockTracker.get(level).blockStorage.get(level.dimension().location());
         if (chunkMap == null) return LongSets.emptySet();
         Object2ObjectMap<ResourceLocation, LongSet> blockMap = chunkMap.get(chunkPos.toLong());
