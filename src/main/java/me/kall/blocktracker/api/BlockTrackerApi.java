@@ -12,13 +12,12 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
-import net.minecraftforge.registries.ForgeRegistries;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 public final class BlockTrackerApi {
     static void trackBlock(Block block) {
-        BlockTracker.TRACKED_BLOCKS.put(ForgeRegistries.BLOCKS.getKey(block), true);
+        BlockTracker.TRACKED_BLOCKS.put(BlockTracker.getId(block), true);
     }
 
     static void trackBlock(ResourceLocation block) {
@@ -26,7 +25,7 @@ public final class BlockTrackerApi {
     }
 
     static void trackBlock(Block block, boolean acceptWorldGen) {
-        BlockTracker.TRACKED_BLOCKS.put(ForgeRegistries.BLOCKS.getKey(block), acceptWorldGen);
+        BlockTracker.TRACKED_BLOCKS.put(BlockTracker.getId(block), acceptWorldGen);
     }
 
     static void trackBlock(ResourceLocation block, boolean acceptWorldGen) {
@@ -34,7 +33,7 @@ public final class BlockTrackerApi {
     }
 
     static LongSet getTrackedBlocks(ServerLevel level, ChunkPos chunkPos, Block block) {
-        return getTrackedBlocks(level, chunkPos, ForgeRegistries.BLOCKS.getKey(block));
+        return getTrackedBlocks(level, chunkPos, BlockTracker.getId(block));
     }
 
     static LongSet getTrackedBlocks(ServerLevel level, @NotNull ChunkPos chunkPos, @Nullable ResourceLocation blockId) {

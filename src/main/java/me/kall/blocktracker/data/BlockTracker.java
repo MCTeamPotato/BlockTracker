@@ -53,7 +53,7 @@ public class BlockTracker extends SavedData {
             for (Object2BooleanMap.Entry<ResourceLocation> entry : BlockTracker.TRACKED_BLOCKS.object2BooleanEntrySet()) {
                 ResourceLocation blockId = entry.getKey();
                 boolean worldGen = entry.getBooleanValue();
-                Block block = ForgeRegistries.BLOCKS.getValue(blockId);
+                Block block = getBlock(blockId);
                 if (block instanceof Trackable trackable) {
                     trackable.trackable$setTracked(true);
                     trackable.worldGen$setAccepted(worldGen);
@@ -75,7 +75,7 @@ public class BlockTracker extends SavedData {
                 if (dimMap == null) continue;
                 dimMap.forEach((chunkKey, blockMap) -> {
                     for (ResourceLocation id : blockMap.keySet()) {
-                        if (!Trackable.isTracked(ForgeRegistries.BLOCKS.getValue(id))) {
+                        if (!Trackable.isTracked(getBlock(id))) {
                             toRemove.add(new LongObjectImmutablePair<>(chunkKey, id));
                         }
                     }
@@ -107,14 +107,14 @@ public class BlockTracker extends SavedData {
         if (Trackable.isTracked(oldBlock)) {
             boolean acceptWorldGen = Trackable.acceptWorldGen(oldBlock);
             if (acceptWorldGen || !isWorldGen) {
-                level.getServer().execute(() -> BlockTracker.get(level).removeBlock(level, pos, ForgeRegistries.BLOCKS.getKey(oldBlock)));
+                level.getServer().execute(() -> BlockTracker.get(level).removeBlock(level, pos, getId(oldBlock)));
             }
         }
 
         if (Trackable.isTracked(newBlock)) {
             boolean acceptWorldGen = Trackable.acceptWorldGen(newBlock);
             if (acceptWorldGen || !isWorldGen) {
-                level.getServer().execute(() -> BlockTracker.get(level).addBlock(level, pos, ForgeRegistries.BLOCKS.getKey(newBlock)));
+                level.getServer().execute(() -> BlockTracker.get(level).addBlock(level, pos, getId(newBlock)));
             }
         }
     }
@@ -174,6 +174,14 @@ public class BlockTracker extends SavedData {
 
         Main.LOGGER.info("TrackedBlockData loaded successfully with {} dimensions", data.blockStorage.size());
         return data;
+    }
+
+    public static @Nullable ResourceLocation getId(Block block) {
+        return ForgeRegistries.BLOCKS.getKey(block);
+    }
+
+    public static @Nullable Block getBlock(ResourceLocation id) {
+        return ForgeRegistries.BLOCKS.getValue(id);
     }
 
     @Override
