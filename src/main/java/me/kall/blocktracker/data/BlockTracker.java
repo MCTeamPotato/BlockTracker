@@ -1,6 +1,10 @@
 package me.kall.blocktracker.data;
 
-import it.unimi.dsi.fastutil.longs.*;
+import com.mojang.datafixers.util.Pair;
+import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import it.unimi.dsi.fastutil.longs.LongSet;
 import it.unimi.dsi.fastutil.objects.Object2BooleanMap;
 import it.unimi.dsi.fastutil.objects.Object2BooleanOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
@@ -8,7 +12,6 @@ import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import me.kall.blocktracker.Main;
 import me.kall.blocktracker.api.Trackable;
 import me.kall.blocktracker.event.BlockChangeEvent;
-import net.minecraft.MethodsReturnNonnullByDefault;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -20,9 +23,10 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.saveddata.SavedData;
-import net.minecraftforge.event.server.ServerStartedEvent;
-import net.minecraftforge.event.server.ServerStartingEvent;
+import net.minecraftforge.common.util.Constants;
 import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.fml.event.server.FMLServerStartedEvent;
+import net.minecraftforge.fml.event.server.FMLServerStartingEvent;
 import net.minecraftforge.registries.ForgeRegistries;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
@@ -34,7 +38,6 @@ import java.util.List;
 
 @ApiStatus.Internal
 @ParametersAreNonnullByDefault
-@MethodsReturnNonnullByDefault
 public class BlockTracker extends SavedData {
     public static final String DATA_NAME = "TrackedBlockData";
 
@@ -42,19 +45,24 @@ public class BlockTracker extends SavedData {
 
     public final Object2ObjectMap<ResourceLocation, Long2ObjectMap<Object2ObjectMap<ResourceLocation, LongSet>>> blockStorage = new Object2ObjectOpenHashMap<>();
 
+    public BlockTracker() {
+        super(DATA_NAME);
+    }
+
     public static void register(IEventBus bus) {
         bus.addListener(BlockTracker::initTracker);
         bus.addListener(BlockTracker::cleanData);
         bus.addListener(BlockTracker::blockChange);
     }
 
-    private static void initTracker(@NotNull ServerStartingEvent event) {
+    private static void initTracker(@NotNull FMLServerStartingEvent event) {
         event.getServer().execute(() -> {
             for (Object2BooleanMap.Entry<ResourceLocation> entry : BlockTracker.TRACKED_BLOCKS.object2BooleanEntrySet()) {
                 ResourceLocation blockId = entry.getKey();
                 boolean worldGen = entry.getBooleanValue();
                 Block block = getBlock(blockId);
-                if (block instanceof Trackable trackable) {
+                if (block instanceof Trackable) {
+                    Trackable trackable = (Trackable) block;
                     trackable.trackable$setTracked(true);
                     trackable.worldGen$setAccepted(worldGen);
                     Main.LOGGER.debug("Successfully registered tracked block: {}", blockId);
@@ -65,24 +73,24 @@ public class BlockTracker extends SavedData {
         });
     }
 
-    private static void cleanData(ServerStartedEvent event) {
+    private static void cleanData(FMLServerStartedEvent event) {
         event.getServer().execute(() -> {
             for (ServerLevel level : event.getServer().getAllLevels()) {
                 BlockTracker blockTracker = BlockTracker.get(level);
-                List<LongObjectPair<ResourceLocation>> toRemove = new ArrayList<>();
+                List<Pair<Long, ResourceLocation>> toRemove = new ArrayList<>();
                 ResourceLocation dim = level.dimension().location();
                 Long2ObjectMap<Object2ObjectMap<ResourceLocation, LongSet>> dimMap = blockTracker.blockStorage.get(dim);
                 if (dimMap == null) continue;
                 dimMap.forEach((chunkKey, blockMap) -> {
                     for (ResourceLocation id : blockMap.keySet()) {
                         if (!Trackable.isTracked(getBlock(id))) {
-                            toRemove.add(new LongObjectImmutablePair<>(chunkKey, id));
+                            toRemove.add(new Pair<>(chunkKey, id));
                         }
                     }
                 });
-                for (LongObjectPair<ResourceLocation> entry : toRemove) {
-                    long chunkKey = entry.firstLong();
-                    ResourceLocation block = entry.second();
+                for (Pair<Long, ResourceLocation> entry : toRemove) {
+                    long chunkKey = entry.getFirst();
+                    ResourceLocation block = entry.getSecond();
                     try {
                         dimMap.get(chunkKey).remove(block);
                     } catch (Throwable e) {
@@ -119,7 +127,7 @@ public class BlockTracker extends SavedData {
         }
     }
 
-    public static BlockTracker load(CompoundTag nbt) {
+    public void load(CompoundTag nbt) {
         BlockTracker data = new BlockTracker();
         Main.LOGGER.info("Loading tracked block data...");
 
@@ -153,11 +161,11 @@ public class BlockTracker extends SavedData {
                         continue;
                     }
 
-                    ListTag posList = chunkTag.getList(blockKey, Tag.TAG_LONG);
+                    ListTag posList = chunkTag.getList(blockKey, Constants.NBT.TAG_LONG);
                     LongSet posSet = new LongOpenHashSet();
                     for (Tag tag : posList) {
-                        if (tag instanceof LongTag longTag) {
-                            posSet.add(longTag.getAsLong());
+                        if (tag instanceof LongTag) {
+                            posSet.add(((LongTag)tag).getAsLong());
                         } else {
                             Main.LOGGER.warn("Skipping invalid position tag in block {}: expected LONG, got {}", blockId, tag.getId());
                         }
@@ -173,7 +181,6 @@ public class BlockTracker extends SavedData {
         }
 
         Main.LOGGER.info("TrackedBlockData loaded successfully with {} dimensions", data.blockStorage.size());
-        return data;
     }
 
     public static @Nullable ResourceLocation getId(Block block) {
@@ -228,7 +235,7 @@ public class BlockTracker extends SavedData {
 
     public static BlockTracker get(ServerLevel level) {
         try {
-            return level.getDataStorage().computeIfAbsent(BlockTracker::load, BlockTracker::new, DATA_NAME);
+            return level.getDataStorage().computeIfAbsent(BlockTracker::new, DATA_NAME);
         } catch (Exception e) {
             Main.LOGGER.error("Failed to get BlockTracker for level {}", level.dimension().location());
             Main.LOGGER.error("", e);
@@ -241,7 +248,7 @@ public class BlockTracker extends SavedData {
             if (blockId == null) return;
 
             ResourceLocation dim = level.dimension().location();
-            long chunkKey = ChunkPos.asLong(pos);
+            long chunkKey = ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4);
             long posLong = pos.asLong();
 
             Long2ObjectMap<Object2ObjectMap<ResourceLocation, LongSet>> dimMap = blockStorage.get(dim);
@@ -282,7 +289,7 @@ public class BlockTracker extends SavedData {
                 return;
             }
 
-            long chunkKey = ChunkPos.asLong(pos);
+            long chunkKey = ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4);
             Object2ObjectMap<ResourceLocation, LongSet> blockMap = chunkMap.get(chunkKey);
             if (blockMap == null) {
                 Main.LOGGER.debug("Attempted to remove block from non-existent chunk: {} in dimension {}", chunkKey, dim);

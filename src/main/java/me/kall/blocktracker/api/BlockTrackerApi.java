@@ -41,14 +41,14 @@ public final class BlockTrackerApi {
     }
 
     static LongSet getTrackedBlocks(ServerLevel level, long chunkPos, @Nullable ResourceLocation blockId) {
-        if (blockId == null) return LongSets.emptySet();
-        if (!BlockTracker.TRACKED_BLOCKS.containsKey(blockId)) return LongSets.emptySet();
+        if (blockId == null) return LongSets.EMPTY_SET;
+        if (!BlockTracker.TRACKED_BLOCKS.containsKey(blockId)) return LongSets.EMPTY_SET;
         Long2ObjectMap<Object2ObjectMap<ResourceLocation, LongSet>> chunkMap = BlockTracker.get(level).blockStorage.get(level.dimension().location());
-        if (chunkMap == null) return LongSets.emptySet();
+        if (chunkMap == null) return LongSets.EMPTY_SET;
         Object2ObjectMap<ResourceLocation, LongSet> blockMap = chunkMap.get(chunkPos);
-        if (blockMap == null) return LongSets.emptySet();
+        if (blockMap == null) return LongSets.EMPTY_SET;
         LongSet blocks = blockMap.get(blockId);
-        return blocks == null ? LongSets.emptySet() : LongSets.unmodifiable(blocks);
+        return blocks == null ? LongSets.EMPTY_SET : LongSets.unmodifiable(blocks);
     }
 
     static @NotNull ObjectList<LongSet> getTrackedBlocks(ServerLevel level, @NotNull ChunkPos center, int aroundRadius, @Nullable ResourceLocation blockId) {

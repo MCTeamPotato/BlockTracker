@@ -6,6 +6,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.event.world.BlockEvent;
 import org.jetbrains.annotations.NotNull;
 
+@SuppressWarnings("deprecation")
 public class BlockChangeEvent extends BlockEvent {
     private final BlockState oldState;
     private final ChangeStatus changeStatus;
