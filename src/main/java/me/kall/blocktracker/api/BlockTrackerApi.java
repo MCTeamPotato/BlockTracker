@@ -15,7 +15,7 @@ import net.minecraft.world.level.block.Block;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-public final class BlockTrackerApi {
+public interface BlockTrackerApi {
     static void trackBlock(Block block) {
         BlockTracker.TRACKED_BLOCKS.put(BlockTracker.getId(block), true);
     }
