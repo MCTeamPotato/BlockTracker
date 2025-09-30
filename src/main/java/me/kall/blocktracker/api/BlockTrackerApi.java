@@ -44,11 +44,11 @@ public interface BlockTrackerApi {
         if (blockId == null) return LongSets.emptySet();
         if (!BlockTracker.TRACKED_BLOCKS.containsKey(blockId)) return LongSets.emptySet();
         Long2ObjectMap<Object2ObjectMap<ResourceLocation, LongSet>> chunkMap = BlockTracker.get(level).blockStorage.get(level.dimension().location());
-        if (chunkMap == null) return LongSets.emptySet();
+        if (chunkMap == null || chunkMap.isEmpty()) return LongSets.emptySet();
         Object2ObjectMap<ResourceLocation, LongSet> blockMap = chunkMap.get(chunkPos);
-        if (blockMap == null) return LongSets.emptySet();
+        if (blockMap == null || blockMap.isEmpty()) return LongSets.emptySet();
         LongSet blocks = blockMap.get(blockId);
-        return blocks == null ? LongSets.emptySet() : LongSets.unmodifiable(blocks);
+        return blocks == null  || blocks.isEmpty() ? LongSets.emptySet() : LongSets.unmodifiable(blocks);
     }
 
     static @NotNull ObjectList<LongSet> getTrackedBlocks(ServerLevel level, @NotNull ChunkPos center, int aroundRadius, @Nullable ResourceLocation blockId) {
