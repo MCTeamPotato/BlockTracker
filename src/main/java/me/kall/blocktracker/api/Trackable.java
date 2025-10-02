@@ -1,7 +1,9 @@
 package me.kall.blocktracker.api;
 
 import net.minecraft.world.level.block.Block;
+import org.jetbrains.annotations.ApiStatus;
 
+@ApiStatus.Internal
 public interface Trackable {
     boolean trackable$isTracked();
     void trackable$setTracked(boolean tracked);

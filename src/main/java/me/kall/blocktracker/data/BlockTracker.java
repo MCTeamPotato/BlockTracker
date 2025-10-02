@@ -5,7 +5,6 @@ import it.unimi.dsi.fastutil.objects.Object2BooleanMap;
 import it.unimi.dsi.fastutil.objects.Object2BooleanOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
-import me.kall.blocktracker.Main;
 import me.kall.blocktracker.api.Trackable;
 import me.kall.blocktracker.event.BlockChangeEvent;
 import net.minecraft.MethodsReturnNonnullByDefault;
@@ -33,6 +32,7 @@ import org.jetbrains.annotations.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Predicate;
 
 @ApiStatus.Internal
 @ParametersAreNonnullByDefault
@@ -41,6 +41,7 @@ public class BlockTracker extends SavedData {
     public static final String DATA_NAME = "TrackedBlockData";
 
     public static final Object2BooleanMap<ResourceLocation> TRACKED_BLOCKS = new Object2BooleanOpenHashMap<>();
+    public static final Object2ObjectMap<ResourceLocation, Predicate<Block>> TRACKING_RULES = new Object2ObjectOpenHashMap<>();
 
     public final Object2ObjectMap<ResourceLocation, Long2ObjectMap<Object2ObjectMap<ResourceLocation, LongSet>>> blockStorage = new Object2ObjectOpenHashMap<>();
 
@@ -59,9 +60,6 @@ public class BlockTracker extends SavedData {
                 if (block instanceof Trackable trackable) {
                     trackable.trackable$setTracked(true);
                     trackable.worldGen$setAccepted(worldGen);
-                    Main.LOGGER.debug("Successfully registered tracked block: {}", blockId);
-                } else {
-                    Main.LOGGER.warn("Failed to register tracked block: {} - Block not found", blockId);
                 }
             }
         });
@@ -85,12 +83,7 @@ public class BlockTracker extends SavedData {
                 for (LongObjectPair<ResourceLocation> entry : toRemove) {
                     long chunkKey = entry.firstLong();
                     ResourceLocation block = entry.second();
-                    try {
-                        dimMap.get(chunkKey).remove(block);
-                    } catch (Throwable e) {
-                        Main.LOGGER.error("Failed to remove out-dated tracked block {} from chunk {}", block, new ChunkPos(chunkKey).toString());
-                        Main.LOGGER.error("", e);
-                    }
+                    dimMap.get(chunkKey).remove(block);
                 }
             }
         });
@@ -101,68 +94,67 @@ public class BlockTracker extends SavedData {
         BlockState oldState = event.getOldState();
         BlockState newState = event.getNewState();
         ServerLevel level = event.getLevel();
+
         Block oldBlock = oldState.getBlock();
         Block newBlock = newState.getBlock();
 
-        boolean isWorldGen = !level.getServer().isSameThread();
+        ResourceLocation oldId = getId(oldBlock);
+        ResourceLocation newId = getId(newBlock);
 
-        if (Trackable.isTracked(oldBlock)) {
+        boolean isWorldGen = !event.isSameThread();
+
+        if (Trackable.isTracked(oldBlock) && oldId != null) {
             boolean acceptWorldGen = Trackable.acceptWorldGen(oldBlock);
             if (acceptWorldGen || !isWorldGen) {
-                level.getServer().execute(() -> BlockTracker.get(level).removeBlock(level, pos, getId(oldBlock)));
+                level.getServer().execute(() -> {
+                    Predicate<Block> rule = TRACKING_RULES.get(oldId);
+                    if (rule == null) {
+                        BlockTracker.get(level).removeBlock(level, pos, oldId);
+                    } else {
+                        if (rule.test(oldBlock)) BlockTracker.get(level).removeBlock(level, pos, oldId);
+                    }
+                });
             }
         }
 
-        if (Trackable.isTracked(newBlock)) {
+        if (Trackable.isTracked(newBlock) && newId != null) {
             boolean acceptWorldGen = Trackable.acceptWorldGen(newBlock);
             if (acceptWorldGen || !isWorldGen) {
-                level.getServer().execute(() -> BlockTracker.get(level).addBlock(level, pos, getId(newBlock)));
+                level.getServer().execute(() -> {
+                    Predicate<Block> rule = TRACKING_RULES.get(newId);
+                    if (rule == null) {
+                        BlockTracker.get(level).addBlock(level, pos, newId);
+                    } else {
+                        if (rule.test(newBlock)) BlockTracker.get(level).addBlock(level, pos, newId);
+                    }
+                });
             }
         }
     }
 
     public static BlockTracker load(CompoundTag nbt) {
         BlockTracker data = new BlockTracker();
-        Main.LOGGER.info("Loading tracked block data...");
 
         for (String dimKey : nbt.getAllKeys()) {
             ResourceLocation dimID = ResourceLocation.tryParse(dimKey);
-            if (dimID == null) {
-                Main.LOGGER.warn("Skipping invalid dimension key in NBT: {}", dimKey);
-                continue;
-            }
+            if (dimID == null) continue;
 
             CompoundTag dimTag = nbt.getCompound(dimKey);
             Long2ObjectOpenHashMap<Object2ObjectMap<ResourceLocation, LongSet>> chunkMap = new Long2ObjectOpenHashMap<>();
 
             for (String chunkKeyStr : dimTag.getAllKeys()) {
-                long chunkKey;
-                try {
-                    chunkKey = Long.parseLong(chunkKeyStr);
-                } catch (NumberFormatException e) {
-                    Main.LOGGER.warn("Skipping invalid chunk key in dimension {}: {}", dimID, chunkKeyStr);
-                    Main.LOGGER.warn("", e);
-                    continue;
-                }
+                long chunkKey = Long.parseLong(chunkKeyStr);
 
                 CompoundTag chunkTag = dimTag.getCompound(chunkKeyStr);
                 Object2ObjectOpenHashMap<ResourceLocation, LongSet> blockMap = new Object2ObjectOpenHashMap<>();
 
                 for (String blockKey : chunkTag.getAllKeys()) {
                     ResourceLocation blockId = ResourceLocation.tryParse(blockKey);
-                    if (blockId == null) {
-                        Main.LOGGER.warn("Skipping invalid block key in chunk {}: {}", chunkKeyStr, blockKey);
-                        continue;
-                    }
-
+                    if (blockId == null) continue;
                     ListTag posList = chunkTag.getList(blockKey, Tag.TAG_LONG);
                     LongSet posSet = new LongOpenHashSet();
                     for (Tag tag : posList) {
-                        if (tag instanceof LongTag longTag) {
-                            posSet.add(longTag.getAsLong());
-                        } else {
-                            Main.LOGGER.warn("Skipping invalid position tag in block {}: expected LONG, got {}", blockId, tag.getId());
-                        }
+                        if (tag instanceof LongTag longTag) posSet.add(longTag.getAsLong());
                     }
                     blockMap.put(blockId, posSet);
                 }
@@ -171,10 +163,8 @@ public class BlockTracker extends SavedData {
             }
 
             data.blockStorage.put(dimID, chunkMap);
-            Main.LOGGER.debug("Loaded {} chunks for dimension {}", chunkMap.size(), dimID);
         }
 
-        Main.LOGGER.info("TrackedBlockData loaded successfully with {} dimensions", data.blockStorage.size());
         return data;
     }
 
@@ -186,21 +176,19 @@ public class BlockTracker extends SavedData {
         return BuiltInRegistries.BLOCK.get(id);
     }
 
-    @Override
-    public CompoundTag save(CompoundTag nbt, HolderLookup.Provider registries) {
-        Main.LOGGER.info("Saving tracked block data...");
-        int totalDimensions = 0;
-        int totalChunks = 0;
-        int totalBlocks = 0;
+    public static void addRule(ResourceLocation block, @Nullable Predicate<Block> additionalRule) {
+        if (additionalRule == null) return;
+        Predicate<Block> rule = TRACKING_RULES.get(block);
+        TRACKING_RULES.put(block, rule == null ? additionalRule : rule.and(additionalRule));
+    }
 
+    @Override
+    public CompoundTag save(CompoundTag nbt) {
         for (Object2ObjectMap.Entry<ResourceLocation, Long2ObjectMap<Object2ObjectMap<ResourceLocation, LongSet>>> dimEntry : blockStorage.object2ObjectEntrySet()) {
             CompoundTag dimTag = new CompoundTag();
-            int dimensionChunks = 0;
-            int dimensionBlocks = 0;
 
             for (Long2ObjectMap.Entry<Object2ObjectMap<ResourceLocation, LongSet>> chunkEntry : dimEntry.getValue().long2ObjectEntrySet()) {
                 CompoundTag chunkTag = new CompoundTag();
-                int chunkBlocks = 0;
 
                 for (Object2ObjectMap.Entry<ResourceLocation, LongSet> blockEntry : chunkEntry.getValue().object2ObjectEntrySet()) {
                     ListTag posList = new ListTag();
@@ -208,34 +196,19 @@ public class BlockTracker extends SavedData {
                         posList.add(LongTag.valueOf(posLong));
                     }
                     chunkTag.put(blockEntry.getKey().toString(), posList);
-                    chunkBlocks++;
                 }
 
                 dimTag.put(Long.toString(chunkEntry.getLongKey()), chunkTag);
-                dimensionChunks++;
-                dimensionBlocks += chunkBlocks;
             }
 
             nbt.put(dimEntry.getKey().toString(), dimTag);
-            totalDimensions++;
-            totalChunks += dimensionChunks;
-            totalBlocks += dimensionBlocks;
-
-            Main.LOGGER.debug("Saved dimension {}: {} chunks, {} blocks", dimEntry.getKey(), dimensionChunks, dimensionBlocks);
         }
 
-        Main.LOGGER.info("TrackedBlockData saved: {} dimensions, {} chunks, {} blocks", totalDimensions, totalChunks, totalBlocks);
         return nbt;
     }
 
     public static BlockTracker get(ServerLevel level) {
-        try {
-            return level.getDataStorage().computeIfAbsent(factory(), DATA_NAME);
-        } catch (Exception e) {
-            Main.LOGGER.error("Failed to get BlockTracker for level {}", level.dimension().location());
-            Main.LOGGER.error("", e);
-            return new BlockTracker();
-        }
+        return level.getDataStorage().computeIfAbsent(factory(), DATA_NAME);
     }
 
     private static Factory<BlockTracker> factory() {
@@ -243,82 +216,59 @@ public class BlockTracker extends SavedData {
     }
 
     public void addBlock(ServerLevel level, BlockPos pos, @Nullable ResourceLocation blockId) {
-        try {
-            if (blockId == null) return;
+        if (blockId == null) return;
 
-            ResourceLocation dim = level.dimension().location();
-            long chunkKey = ChunkPos.asLong(pos);
-            long posLong = pos.asLong();
+        ResourceLocation dim = level.dimension().location();
+        long chunkKey = ChunkPos.asLong(pos);
+        long posLong = pos.asLong();
 
-            Long2ObjectMap<Object2ObjectMap<ResourceLocation, LongSet>> dimMap = blockStorage.get(dim);
-            if (dimMap == null) {
-                dimMap = new Long2ObjectOpenHashMap<>();
-                blockStorage.put(dim, dimMap);
-            }
+        Long2ObjectMap<Object2ObjectMap<ResourceLocation, LongSet>> dimMap = blockStorage.get(dim);
+        if (dimMap == null) {
+            dimMap = new Long2ObjectOpenHashMap<>();
+            blockStorage.put(dim, dimMap);
+        }
 
-            Object2ObjectMap<ResourceLocation, LongSet> blockMap = dimMap.get(chunkKey);
-            if (blockMap == null) {
-                blockMap = new Object2ObjectOpenHashMap<>();
-                dimMap.put(chunkKey, blockMap);
-            }
+        Object2ObjectMap<ResourceLocation, LongSet> blockMap = dimMap.get(chunkKey);
+        if (blockMap == null) {
+            blockMap = new Object2ObjectOpenHashMap<>();
+            dimMap.put(chunkKey, blockMap);
+        }
 
-            LongSet posSet = blockMap.get(blockId);
-            if (posSet == null) {
-                posSet = new LongOpenHashSet();
-                blockMap.put(blockId, posSet);
-            }
+        LongSet posSet = blockMap.get(blockId);
+        if (posSet == null) {
+            posSet = new LongOpenHashSet();
+            blockMap.put(blockId, posSet);
+        }
 
-            if (posSet.add(posLong)) {
-                setDirty();
-                Main.LOGGER.debug("Added block {} at {} in dimension {}", blockId, pos, dim);
-            }
-        } catch (Exception e) {
-            Main.LOGGER.error("Failed to add block {} at {} in dimension {}", blockId, pos, level.dimension().location());
-            Main.LOGGER.error("", e);
+        if (posSet.add(posLong)) {
+            setDirty();
         }
     }
 
     public void removeBlock(ServerLevel level, BlockPos pos, @Nullable ResourceLocation blockId) {
-        try {
-            if (blockId == null) return;
-            ResourceLocation dim = level.dimension().location();
-            Long2ObjectMap<Object2ObjectMap<ResourceLocation, LongSet>> chunkMap = blockStorage.get(dim);
-            if (chunkMap == null) {
-                Main.LOGGER.debug("Attempted to remove block from non-existent dimension: {}", dim);
-                return;
-            }
+        if (blockId == null) return;
+        ResourceLocation dim = level.dimension().location();
+        Long2ObjectMap<Object2ObjectMap<ResourceLocation, LongSet>> chunkMap = blockStorage.get(dim);
+        if (chunkMap == null) return;
 
-            long chunkKey = ChunkPos.asLong(pos);
-            Object2ObjectMap<ResourceLocation, LongSet> blockMap = chunkMap.get(chunkKey);
-            if (blockMap == null) {
-                Main.LOGGER.debug("Attempted to remove block from non-existent chunk: {} in dimension {}", chunkKey, dim);
-                return;
-            }
+        long chunkKey = ChunkPos.asLong(pos);
+        Object2ObjectMap<ResourceLocation, LongSet> blockMap = chunkMap.get(chunkKey);
+        if (blockMap == null) return;
 
-            LongSet posSet = blockMap.get(blockId);
-            if (posSet == null) {
-                Main.LOGGER.debug("Attempted to remove non-existent block: {} in chunk {} dimension {}", blockId, chunkKey, dim);
-                return;
-            }
+        LongSet posSet = blockMap.get(blockId);
+        if (posSet == null) return;
 
-            if (posSet.remove(pos.asLong())) {
-                setDirty();
-                Main.LOGGER.debug("Removed block {} at {} in dimension {}", blockId, pos, dim);
-
-                if (posSet.isEmpty()) {
-                    blockMap.remove(blockId);
-                    if (blockMap.isEmpty()) {
-                        chunkMap.remove(chunkKey);
-                        if (chunkMap.isEmpty()) {
-                            blockStorage.remove(dim);
-                            Main.LOGGER.debug("Removed empty dimension: {}", dim);
-                        }
+        if (posSet.remove(pos.asLong())) {
+            setDirty();
+            if (posSet.isEmpty()) {
+                blockMap.remove(blockId);
+                if (blockMap.isEmpty()) {
+                    chunkMap.remove(chunkKey);
+                    if (chunkMap.isEmpty()) {
+                        blockStorage.remove(dim);
                     }
                 }
             }
-        } catch (Exception e) {
-            Main.LOGGER.error("Failed to remove block {} at {} in dimension {}", blockId, pos, level.dimension().location());
-            Main.LOGGER.error("", e);
         }
     }
 }
