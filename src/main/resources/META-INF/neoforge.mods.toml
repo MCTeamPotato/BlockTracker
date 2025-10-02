@@ -6,10 +6,10 @@ license = "MIT"
 [[mods]]
 modId = "blocktracker"
 version = "${version}"
-displayName = "BlockTracker"
+displayName = "BlockTrackerApi"
 authors = "Kall"
 description = '''
-A Minecraft mod
+Track the blocks in your worlds.
 '''
 #logoFile = ""
 
