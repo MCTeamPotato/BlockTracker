@@ -183,7 +183,7 @@ public class BlockTracker extends SavedData {
     }
 
     @Override
-    public CompoundTag save(CompoundTag nbt) {
+    public CompoundTag save(CompoundTag nbt, HolderLookup.Provider registries) {
         for (Object2ObjectMap.Entry<ResourceLocation, Long2ObjectMap<Object2ObjectMap<ResourceLocation, LongSet>>> dimEntry : blockStorage.object2ObjectEntrySet()) {
             CompoundTag dimTag = new CompoundTag();
 
