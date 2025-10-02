@@ -6,8 +6,6 @@
     "conformVisibility": false
   },
   "minVersion": "0.8",
-  "client": [
-  ],
   "mixins": [
     "BlockMixin",
     "ServerLevelMixin"
