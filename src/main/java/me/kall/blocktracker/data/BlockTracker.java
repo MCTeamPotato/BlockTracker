@@ -160,7 +160,7 @@ public class BlockTracker extends SavedData {
                     ListTag posList = chunkTag.getList(blockKey, Constants.NBT.TAG_LONG);
                     LongSet posSet = new LongOpenHashSet();
                     for (Tag tag : posList) {
-                        if (tag instanceof LongTag longTag) posSet.add(longTag.getAsLong());
+                        if (tag instanceof LongTag) posSet.add(((LongTag)tag).getAsLong());
                     }
                     blockMap.put(blockId, posSet);
                 }
@@ -218,9 +218,9 @@ public class BlockTracker extends SavedData {
     public void addBlock(ServerLevel level, BlockPos pos, @Nullable ResourceLocation blockId) {
         if (blockId == null) return;
 
-            ResourceLocation dim = level.dimension().location();
-            long chunkKey = ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4);
-            long posLong = pos.asLong();
+        ResourceLocation dim = level.dimension().location();
+        long chunkKey = ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4);
+        long posLong = pos.asLong();
 
         Long2ObjectMap<Object2ObjectMap<ResourceLocation, LongSet>> dimMap = blockStorage.get(dim);
         if (dimMap == null) {
